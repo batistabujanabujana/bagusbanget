@@ -27,6 +27,12 @@ const Users = db.define(
     beratbadan: {
       type: DataTypes.STRING,
     },
+    aktivitas: {
+      type: DataTypes.STRING,
+    },
+    apa: {
+      type: DataTypes.STRING,
+    },
     refresh_token: {
       type: DataTypes.TEXT,
     },

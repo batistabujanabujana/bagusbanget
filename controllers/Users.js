@@ -4,58 +4,98 @@ import jwt from "jsonwebtoken";
 
 export const getUsers = async (req, res) => {
   try {
-    const users = await Users.findAll({
-      attributes: ["id", "name", "username", "usia", "gender", "tinggibadan", "beratbadan"],
+    const loggedInUsername = req.user.username; // Mendapatkan username pengguna yang sedang login dari token
+    const loggedInUser = await Users.findOne({
+      where: { username: loggedInUsername },
+      attributes: ["name", "username", "usia", "gender", "tinggibadan", "beratbadan", "aktivitas"],
     });
-    res.json(users);
-  } catch (error) {
-    console, console.log(error);
-  }
-};
 
-export const Register = async (req, res) => {
-  const { name, username, password, configpassword, usia, gender, tinggibadan, beratbadan } = req.body;
-  if (password !== configpassword) return res.status(400).json({ msg: "passwors salah" });
-  const salt = await bcrypt.genSalt();
-  const hashpassword = await bcrypt.hash(password, salt);
-  try {
-    await Users.create({
-      name: name,
-      username: username,
-      password: hashpassword,
-      usia: usia,
-      gender: gender,
-      tinggibadan: tinggibadan,
-      beratbadan: beratbadan,
-    });
-    res.json({ msg: "regis sukses" });
+    if (loggedInUser) {
+      res.json(loggedInUser); // Mengirimkan data pengguna yang ditemukan sebagai respons JSON
+    } else {
+      res.status(404).json({ message: "User not found" }); // Mengirimkan respons 404 jika pengguna tidak ditemukan
+    }
   } catch (error) {
     console.log(error);
+    res.status(500).json({ message: "An error occurred" }); // Mengirimkan respons 500 jika terjadi kesalahan
   }
 };
 
+// Fungsi untuk mendaftarkan pengguna baru
+export const Register = async (req, res) => {
+  const { name, username, password, usia, gender, tinggibadan, beratbadan, aktivitas } = req.body;
+
+  try {
+    // Cek apakah username sudah ada
+    const existingUser = await Users.findOne({
+      where: { username },
+    });
+
+    if (existingUser) {
+      // Jika username sudah ada, kembalikan error dengan status 400
+      return res.status(400).send(`"status": "Error",\n"message": "User with username \\"${username}\\" already exists!"`);
+    }
+
+    // Enkripsi password
+    const salt = await bcrypt.genSalt();
+    const hashpassword = await bcrypt.hash(password, salt);
+
+    // Buat user baru
+    await Users.create({
+      name,
+      username,
+      password: hashpassword,
+      usia,
+      gender,
+      tinggibadan,
+      beratbadan,
+      aktivitas,
+    });
+
+    // Return response sebagai teks biasa dengan newline setelah status
+    res.status(200).send(`"status": "success",\n"message": "User registered successfully"`);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(`"status": "Error",\n"message": "Registration failed due to an internal error."`);
+  }
+};
+
+// Fungsi untuk login pengguna
 export const Login = async (req, res) => {
   try {
-    const user = await Users.findAll({
+    // Mencari user berdasarkan username
+    const user = await Users.findOne({
       where: {
         username: req.body.username,
       },
     });
-    const match = await bcrypt.compare(req.body.password, user[0].password);
-    if (!match) return res.status(400).json({ msg: "salah" });
-    const userId = user[0].id;
-    const name = user[0].name;
-    const username = user[0].username;
-    const usia = user[0].usia;
-    const gender = user[0].gender;
-    const tinggibadan = user[0].tinggibadan;
-    const beratbadan = user[0].beratbadan;
-    const accessToken = jwt.sign({ userId, name, username, usia, gender, tinggibadan, beratbadan }, process.env.ACCESS_TOKEN_SECRET, {
-      expiresIn: "60s",
-    });
-    const refreshToken = jwt.sign({ userId, name, username, usia, gender, tinggibadan, beratbadan }, process.env.REFRESH_TOKEN_SECRET, {
+
+    // Jika user tidak ditemukan
+    if (!user) {
+      return res.status(404).send(`"status": "Error",\n"message": "User with username \\"${req.body.username}\\" not found!"`);
+    }
+
+    // Memeriksa apakah password sesuai
+    const match = await bcrypt.compare(req.body.password, user.password);
+    if (!match) {
+      return res.status(400).send(`"status": "Failed",\n"message": "Wrong password!"`);
+    }
+
+    // Jika password cocok, buat token dan kirimkan respons
+    const userId = user.id;
+    const name = user.name;
+    const username = user.username;
+    const usia = user.usia;
+    const gender = user.gender;
+    const tinggibadan = user.tinggibadan;
+    const beratbadan = user.beratbadan;
+    const aktivitas = user.aktivitas;
+    const accessToken = jwt.sign({ userId, name, username, usia, gender, tinggibadan, beratbadan, aktivitas }, process.env.ACCESS_TOKEN_SECRET);
+    const refreshToken = jwt.sign({ userId, name, username, usia, gender, tinggibadan, beratbadan, aktivitas }, process.env.REFRESH_TOKEN_SECRET, {
       expiresIn: "1d",
     });
+
+    // Update refresh token di database
     await Users.update(
       { refresh_token: refreshToken },
       {
@@ -65,53 +105,219 @@ export const Login = async (req, res) => {
       }
     );
 
+    // Mengatur cookie untuk refresh token
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 100,
       secure: true,
     });
-    res.json({ accessToken });
-    // res.json({
-    //   accessToken,
-    //   user: {
-    //     id: userId,
-    //     name,
-    //     username,
-    //     usia,
-    //     gender,
-    //     tinggibadan,
-    //     beratbadan,
-    //   },
-    // });
+
+    // Mengirimkan respons dalam format teks yang diinginkan
+    res.status(200).send(`"status": "success",\n` + `"message": "User login successfully",\n` + `"user": {\n` + `  "name": "${name}",\n` + `  "token": "${accessToken}"\n` + `}`);
   } catch (error) {
-    res.status(404).json({ msg: "salah" });
+    console.error(error);
+    res.status(500).send(`"status": "Error",\n"message": "An internal error occurred during login."`);
   }
 };
 
+// export const Login = async (req, res) => {
+//   try {
+//     const user = await Users.findAll({
+//       where: {
+//         username: req.body.username,
+//       },
+//     });
+//     const match = await bcrypt.compare(req.body.password, user[0].password);
+//     if (!match)
+//       return res.status(400).json({
+//         status: "Failed",
+//         message: "Wrong password!",
+//       });
+//     const userId = user[0].id;
+//     const name = user[0].name;
+//     const username = user[0].username;
+//     const usia = user[0].usia;
+//     const gender = user[0].gender;
+//     const tinggibadan = user[0].tinggibadan;
+//     const beratbadan = user[0].beratbadan;
+//     const aktivitas = user[0].aktivitas;
+//     const accessToken = jwt.sign({ userId, name, username, usia, gender, tinggibadan, beratbadan, aktivitas }, process.env.ACCESS_TOKEN_SECRET);
+//     const refreshToken = jwt.sign({ userId, name, username, usia, gender, tinggibadan, beratbadan, aktivitas }, process.env.REFRESH_TOKEN_SECRET, {
+//       expiresIn: "1d",
+//     });
+//     await Users.update(
+//       { refresh_token: refreshToken },
+//       {
+//         where: {
+//           id: userId,
+//         },
+//       }
+//     );
+
+//     res.cookie("refreshToken", refreshToken, {
+//       httpOnly: true,
+//       maxAge: 24 * 60 * 60 * 100,
+//       secure: true,
+//     });
+//     res.status(200).json({
+//       status: "success",
+//       message: "User login successfully",
+//       users: {
+//         name,
+//         token: accessToken,
+//       },
+//     });
+//     // res.json({
+//     //   accessToken,
+//     //  });
+//     // res.json({
+//     //   accessToken,
+//     //   user: {
+//     //     id: userId,
+//     //     name,
+//     //     username,
+//     //     usia,
+//     //     gender,
+//     //     tinggibadan,
+//     //     beratbadan,
+//     //   },
+//     // });
+//   } catch (error) {
+//     res.status(404).json({
+//       status: "Failed",
+//       message: "Wrong username or password!",
+//     });
+//   }
+// };
+
+// Endpoint untuk mengupdate profil pengguna
+// export const updateUser = async (req, res) => {
+//   const { tinggibadan, beratbadan, aktivitas } = req.body;
+//   const userId = req.user.userId;
+
+//   try {
+//     // Cari pengguna berdasarkan ID
+//     const user = await Users.findByPk(userId);
+
+//     if (!user) {
+//       return res.status(404).json({
+//         status: "Error",
+//         message: "User not found!",
+//       });
+//     }
+
+//     // Update data pengguna
+//     user.tinggibadan = tinggibadan || user.tinggibadan;
+//     user.beratbadan = beratbadan || user.beratbadan;
+//     user.aktivitas = aktivitas || user.aktivitas;
+
+//     await user.save();
+
+//     res.status(200).json({
+//       status: "Success",
+//       message: "Profile updated successfully!",
+//       user: {
+//         id: user.id,
+//         name: user.name,
+//         username: user.username,
+//         usia: user.usia,
+//         gender: user.gender,
+//         tinggibadan: user.tinggibadan,
+//         beratbadan: user.beratbadan,
+//         aktivitas: user.aktivitas,
+//       },
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).json({
+//       status: "Error",
+//       message: "An error occurred while updating profile",
+//     });
+//   }
+// };
+
+// export const updateUser = async (req, res) => {
+//   const { tinggibadan, beratbadan, aktivitas } = req.body;
+//   const { userId, username } = req.user;
+
+//   try {
+//     // Cari pengguna berdasarkan userId
+//     const user = await Users.findByPk(userId);
+
+//     if (!user) {
+//       return res.status(404).json({
+//         status: "Error",
+//         message: "User not found!",
+//       });
+//     }
 export const updateUser = async (req, res) => {
-  const { id } = req.params; // Assuming the user ID is passed as a URL parameter
-  const { usia, tinggibadan, beratbadan } = req.body;
+  const { tinggibadan, beratbadan, aktivitas } = req.body;
+  const { userId } = req.user; // Mengambil userId dari token pengguna yang sedang login
 
   try {
-    const user = await Users.findByPk(id);
+    // Cari pengguna berdasarkan userId
+    const user = await Users.findByPk(userId);
 
-    if (!user) return res.status(404).json({ msg: "User not found" });
+    // Jika pengguna tidak ditemukan
+    if (!user) {
+      return res.status(404).send(`"status": "Error",\n"message": "User not found!"`);
+    }
 
-    // Ensure only the authenticated user can update their own information
-    const token = req.headers.authorization.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    if (decoded.userId !== user.id) return res.status(403).json({ msg: "Unauthorized" });
-
-    // Update the user's information
-    user.usia = usia || user.usia;
+    // Update data pengguna dengan data baru jika tersedia
     user.tinggibadan = tinggibadan || user.tinggibadan;
     user.beratbadan = beratbadan || user.beratbadan;
+    user.aktivitas = aktivitas || user.aktivitas;
 
+    // Simpan perubahan ke database
     await user.save();
 
-    res.json({ msg: "User information updated", user });
+    // Mengirimkan respons yang diformat secara manual dalam bentuk teks
+    res
+      .status(200)
+      .send(
+        `"status": "Success",\n` +
+          `"message": "Profile updated successfully!",\n` +
+          `"user": {\n` +
+          `  "name": "${user.name}",\n` +
+          `  "username": "${user.username}",\n` +
+          `  "usia": ${user.usia},\n` +
+          `  "gender": "${user.gender}",\n` +
+          `  "tinggibadan": ${user.tinggibadan},\n` +
+          `  "beratbadan": ${user.beratbadan},\n` +
+          `  "aktivitas": "${user.aktivitas}"\n` +
+          `}`
+      );
   } catch (error) {
     console.log(error);
-    res.status(500).json({ msg: "Server error" });
+    res.status(500).send(`"status": "Error",\n"message": "An error occurred while updating profile"`);
   }
 };
+
+//     // Update data pengguna
+//     user.tinggibadan = tinggibadan || user.tinggibadan;
+//     user.beratbadan = beratbadan || user.beratbadan;
+//     user.aktivitas = aktivitas || user.aktivitas;
+
+//     await user.save();
+
+//     res.status(200).json({
+//       status: "Success",
+//       message: "Profile updated successfully!",
+//       user: {
+//         name: user.name,
+//         username: user.username,
+//         usia: user.usia,
+//         gender: user.gender,
+//         tinggibadan: user.tinggibadan,
+//         beratbadan: user.beratbadan,
+//         aktivitas: user.aktivitas,
+//       },
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).json({
+//       status: "Error",
+//       message: "An error occurred while updating profile",
+//     });
+//   }
+// };
