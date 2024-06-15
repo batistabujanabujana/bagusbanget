@@ -5,11 +5,12 @@ import cookieParser from "cookie-parser";
 import Users from "./model/usermodel.js";
 import router from "./routes/index.js";
 dotenv.config();
+
 const app = express();
 
 try {
   await db.authenticate();
-  console.log("konek");
+  console.log("Database connected");
   await Users.sync();
 } catch (error) {
   console.error(error);
@@ -17,6 +18,7 @@ try {
 
 app.use(cookieParser());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // Middleware untuk menangani x-www-form-urlencoded
 app.use(router);
 
-app.listen(5000, () => console.log("server 5000"));
+app.listen(5000, () => console.log("Server running on port 5000"));
