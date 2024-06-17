@@ -4,6 +4,10 @@ import db from "./config/Database.js";
 import cookieParser from "cookie-parser";
 import Users from "./model/usermodel.js";
 import router from "./routes/index.js";
+import Paijo from "./models/paijo.js";
+import Target from "./model/target.js";
+import Bisa from "./model/bisa.js";
+
 dotenv.config();
 
 const app = express();
@@ -12,6 +16,8 @@ try {
   await db.authenticate();
   console.log("Database connected");
   await Users.sync();
+
+  await Target.sync();
 } catch (error) {
   console.error(error);
 }

@@ -11,28 +11,42 @@ const Users = db.define(
     },
     username: {
       type: DataTypes.STRING,
+      allowNull: false,
     },
     password: {
       type: DataTypes.STRING,
+      allowNull: false,
     },
     usia: {
-      type: DataTypes.STRING,
+      type: DataTypes.INTEGER,
+      defaultValue: 0, // Default 0 jika tidak diisi
+      allowNull: true, // Bisa menerima nilai null
     },
     gender: {
-      type: DataTypes.STRING,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false, // Default 0 jika tidak diisi
+      allowNull: true, // Bisa menerima nilai null
     },
+
     tinggibadan: {
-      type: DataTypes.STRING,
+      type: DataTypes.DOUBLE,
+      defaultValue: 0, // Default 0 jika tidak diisi
+      allowNull: true, // Bisa menerima nilai null
     },
     beratbadan: {
-      type: DataTypes.STRING,
+      type: DataTypes.DOUBLE,
+      defaultValue: 0, // Default 0 jika tidak diisi
+      allowNull: true, // Bisa menerima nilai null
     },
     aktivitas: {
-      type: DataTypes.STRING,
+      type: DataTypes.INTEGER,
+      defaultValue: 0, // Default 0 jika tidak diisi
+      allowNull: true, // Bisa menerima nilai null
     },
-    apa: {
-      type: DataTypes.STRING,
+    jos: {
+      type: DataTypes.BOOLEAN,
     },
+
     refresh_token: {
       type: DataTypes.TEXT,
     },
